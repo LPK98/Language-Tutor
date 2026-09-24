@@ -37,7 +37,7 @@ export const LESSONS: Lesson[] = [
     category: 'grammar',
     categoryLabel: 'Grammar',
     description: 'Must, might, can’t — talk about how sure you are.',
-    image: null,
+    image: require('@/assets/images/Grammer.png'),
   },
   {
     id: 'ordering-food',
@@ -45,7 +45,7 @@ export const LESSONS: Lesson[] = [
     category: 'lesson',
     categoryLabel: 'Lesson',
     description: 'Order a drink and ask for the bill with confidence.',
-    image: null,
+    image: require('@/assets/images/lesson.png'),
   },
   {
     id: 'th-sounds',
@@ -53,7 +53,7 @@ export const LESSONS: Lesson[] = [
     category: 'pronunciation',
     categoryLabel: 'Pronunciation',
     description: 'Hear the difference between think and this.',
-    image: null,
+    image: require('@/assets/images/Pronounce.png'),
   },
 ];
 

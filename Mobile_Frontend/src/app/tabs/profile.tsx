@@ -1,12 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BOTTOM_NAV_CLEARANCE } from '@/components/BottomNavigation';
 import { Card } from '@/components/Card';
+import { DailyGoalCard } from '@/components/DailyGoalCard';
 import { ImagePlaceholder } from '@/components/ImagePlaceholder';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { ProfileHeader } from '@/components/ProfileHeader';
+import { StreakCard } from '@/components/StreakCard';
 import { PROFILE } from '@/constants/profile';
 import { Colors, FontSize, FontWeight, Layout, Radius, Shadow, Spacing } from '@/constants/theme';
 
@@ -21,7 +24,8 @@ function CardLabel({ text }: { text: string }) {
 }
 
 export default function ProfileScreen() {
-  const { name, avatar, tutor, language, level, interest } = PROFILE;
+  const router = useRouter();
+  const { name, avatar, tutor, language, level, interest, dailyGoal, streak } = PROFILE;
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -94,6 +98,10 @@ export default function ProfileScreen() {
             <Text style={styles.interestSubtitle}>{interest.subtitle}</Text>
           </View>
         </Card>
+
+        <DailyGoalCard goal={dailyGoal} onAdjustGoal={() => {}} />
+
+        <StreakCard streak={streak} onPress={() => router.push('/streak')} />
       </ScrollView>
     </SafeAreaView>
   );

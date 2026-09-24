@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -37,6 +38,7 @@ function TopicRail({ section }: { section: PracticeSection }) {
 }
 
 export default function PracticeScreen() {
+  const router = useRouter();
   const rows = categoryRows();
 
   return (
@@ -51,7 +53,11 @@ export default function PracticeScreen() {
           <SectionHeader title="Recommended for you" size="md" />
           <View style={styles.recommendedRow}>
             {RECOMMENDED.map((item) => (
-              <PracticeCard key={item.id} item={item} onPress={() => {}} />
+              <PracticeCard
+                key={item.id}
+                item={item}
+                onPress={() => router.push({ pathname: '/practice/[id]', params: { id: item.id } })}
+              />
             ))}
           </View>
         </View>

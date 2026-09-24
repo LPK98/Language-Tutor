@@ -6,6 +6,16 @@ import { SplashGate } from '@/components/SplashGate';
 
 import { Colors } from '@/constants/theme';
 
+/**
+ * Declared <Stack.Screen> children are placed first, in declaration order, and
+ * React Navigation treats the first screen as the initial route. So `index`
+ * must lead, and the anchor below pins it regardless of declaration order.
+ * Only screens needing options are declared; the rest are registered for free.
+ */
+export const unstable_settings = {
+  initialRouteName: 'index',
+};
+
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
@@ -15,8 +25,10 @@ export default function RootLayout() {
           screenOptions={{
             headerShown: false,
             contentStyle: { backgroundColor: Colors.background },
-          }}
-        />
+          }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="streak/index" options={{ presentation: 'modal' }} />
+        </Stack>
       </SplashGate>
     </SafeAreaProvider>
   );

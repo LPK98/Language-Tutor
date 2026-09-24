@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
+import { Image, type ImageContentFit } from 'expo-image';
 import {
   StyleSheet,
   Text,
@@ -20,6 +20,8 @@ type ImagePlaceholderProps = {
   /** Caption shown by the stand-in. */
   label?: string;
   tint?: string;
+  /** 'contain' suits transparent illustrations; 'cover' suits photos. */
+  contentFit?: ImageContentFit;
   style?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
 };
@@ -33,6 +35,7 @@ export function ImagePlaceholder({
   icon = 'image-outline',
   label,
   tint = Colors.textSecondary,
+  contentFit = 'cover',
   style,
   accessibilityLabel,
 }: ImagePlaceholderProps) {
@@ -43,7 +46,7 @@ export function ImagePlaceholder({
         // View and Image styles differ only in `overflow`; the shared prop keeps
         // callers from having to know which branch renders.
         style={style as StyleProp<ImageStyle>}
-        contentFit="cover"
+        contentFit={contentFit}
         accessibilityLabel={accessibilityLabel}
       />
     );
