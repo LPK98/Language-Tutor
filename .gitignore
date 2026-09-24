@@ -1,0 +1,27 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+
+# Python (Mobile_Backend)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+*.sqlite3
+
+# Node (Mobile_Frontend)
+node_modules/
+.expo/
+dist/
+web-build/
+npm-debug.*
+yarn-error.*
+
+# Editors and OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
