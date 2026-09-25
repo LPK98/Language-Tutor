@@ -1,6 +1,7 @@
 """Password hashing and JWT access tokens."""
 
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 import jwt
@@ -27,27 +28,39 @@ def verify_password(password: str, hashed: str | None) -> bool:
     return password_hash.verify(password, hashed)
 
 
-def create_access_token(user_id: uuid.UUID) -> str:
+@dataclass(frozen=True)
+class TokenClaims:
+    user_id: uuid.UUID
+    # Must equal users.token_version; logging out increases that number, which
+    # revokes every token issued before it.
+    token_version: int
+
+
+def create_access_token(user_id: uuid.UUID, token_version: int) -> str:
     settings = get_settings()
     now = datetime.now(UTC)
     payload = {
         "sub": str(user_id),
+        "ver": token_version,
         "iat": now,
         "exp": now + timedelta(minutes=settings.access_token_expire_minutes),
     }
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
-def decode_access_token(token: str) -> uuid.UUID | None:
-    """Returns the user id from a valid token, or None if it is invalid or expired."""
+def decode_access_token(token: str) -> TokenClaims | None:
+    """Returns the token's claims, or None if it is invalid or expired."""
     settings = get_settings()
     try:
         payload = jwt.decode(
             token,
             settings.jwt_secret_key,
             algorithms=[settings.jwt_algorithm],
-            options={"require": ["exp", "sub"]},
+            options={"require": ["exp", "sub", "ver"]},
         )
-        return uuid.UUID(payload["sub"])
-    except (jwt.InvalidTokenError, ValueError):
+        version = payload["ver"]
+        if type(version) is not int:
+            return None
+        return TokenClaims(user_id=uuid.UUID(payload["sub"]), token_version=version)
+    except (jwt.InvalidTokenError, ValueError, TypeError, AttributeError):
         return None

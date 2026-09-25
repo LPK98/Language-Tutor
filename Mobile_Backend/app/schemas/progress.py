@@ -1,8 +1,8 @@
 import datetime as dt
 
-from pydantic import Field
+from pydantic import Field, StrictInt
 
-from app.schemas.common import CamelModel
+from app.schemas.common import CamelModel, UtcDateTime
 
 
 class DailyGoalOut(CamelModel):
@@ -22,7 +22,8 @@ class StreakOut(CamelModel):
 
 
 class PracticeTimeRequest(CamelModel):
-    seconds: int = Field(gt=0, le=4 * 60 * 60, description="Practice time to add, in seconds.")
+    # Strict: JSON `true` would otherwise count as 1 second.
+    seconds: StrictInt = Field(gt=0, le=4 * 60 * 60, description="Practice time to add, in seconds.")
     date: dt.date | None = Field(
         default=None,
         description="The learner's local date (yyyy-mm-dd). Defaults to today in UTC.",
@@ -38,5 +39,5 @@ class LessonCompleteRequest(CamelModel):
 
 class LessonCompleteOut(CamelModel):
     lesson_id: str
-    completed_at: dt.datetime
+    completed_at: UtcDateTime
     daily_goal: DailyGoalOut

@@ -85,3 +85,19 @@ def test_best_streak_rules():
     assert best_streak([]) == 0
     assert best_streak(days(0, 1, 2, 5, 6)) == 3
     assert best_streak(days(0, 0, 1)) == 2
+
+
+def test_practice_rejects_boolean_seconds(client, auth_headers):
+    response = client.post("/api/progress/practice", headers=auth_headers, json={"seconds": True})
+    assert response.status_code == 422
+
+
+def test_practice_time_is_capped_at_24_hours_a_day(client, auth_headers):
+    for _ in range(7):  # 7 x 4 hours
+        response = client.post("/api/progress/practice", headers=auth_headers, json={"seconds": 4 * 60 * 60})
+    assert response.json()["practisedSeconds"] == 24 * 60 * 60
+
+
+def test_completed_at_is_utc(client, auth_headers):
+    response = client.post("/api/progress/lessons/hello/complete", headers=auth_headers)
+    assert response.json()["completedAt"].endswith("Z")

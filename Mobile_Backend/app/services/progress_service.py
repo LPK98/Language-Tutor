@@ -2,9 +2,10 @@
 
 from datetime import UTC, date, datetime, timedelta
 
-from sqlalchemy import or_, select
+from sqlalchemy import case, or_, select
 from sqlalchemy.orm import Session
 
+from app.core.database import upsert
 from app.core.errors import BadRequestError, NotFoundError
 from app.models import DailyActivity, Lesson, LessonCompletion, User
 from app.schemas.progress import DailyGoalOut, LessonCompleteOut, StreakOut
@@ -90,23 +91,41 @@ def get_daily_goal(db: Session, user: User, day: date) -> DailyGoalOut:
 
 # --- Writes ---
 
+# A day has 24 hours; more than that can only come from a buggy or dishonest
+# client, and would inflate the daily goal.
+MAX_SECONDS_PER_DAY = 24 * 60 * 60
 
-def _activity_row(db: Session, user: User, day: date) -> DailyActivity:
-    activity = db.get(DailyActivity, (user.id, day))
-    if activity is None:
-        activity = DailyActivity(
-            user_id=user.id, activity_date=day, practised_seconds=0, completed_lessons=0
+
+def _add_activity(db: Session, user: User, day: date, *, seconds: int = 0, lessons: int = 0) -> None:
+    """Creates the day's row or adds to it, in one atomic statement.
+
+    Two requests arriving together can neither fail on a duplicate row nor
+    overwrite each other's numbers.
+    """
+    stmt = upsert(db, DailyActivity).values(
+        user_id=user.id,
+        activity_date=day,
+        practised_seconds=min(seconds, MAX_SECONDS_PER_DAY),
+        completed_lessons=lessons,
+    )
+    seconds_total = DailyActivity.practised_seconds + stmt.excluded.practised_seconds
+    db.execute(
+        stmt.on_conflict_do_update(
+            index_elements=[DailyActivity.user_id, DailyActivity.activity_date],
+            set_={
+                "practised_seconds": case(
+                    (seconds_total > MAX_SECONDS_PER_DAY, MAX_SECONDS_PER_DAY),
+                    else_=seconds_total,
+                ),
+                "completed_lessons": DailyActivity.completed_lessons
+                + stmt.excluded.completed_lessons,
+            },
         )
-        db.add(activity)
-        db.flush()
-    return activity
+    )
 
 
 def add_practice_time(db: Session, user: User, seconds: int, day: date) -> DailyGoalOut:
-    activity = _activity_row(db, user, day)
-    # Adds in SQL (practised_seconds = practised_seconds + n), so two requests
-    # arriving together cannot overwrite each other.
-    activity.practised_seconds = DailyActivity.practised_seconds + seconds
+    _add_activity(db, user, day, seconds=seconds)
     db.commit()
     return get_daily_goal(db, user, day)
 
@@ -115,19 +134,25 @@ def complete_lesson(db: Session, user: User, lesson_id: str, day: date) -> Lesso
     if db.get(Lesson, lesson_id) is None:
         raise NotFoundError("Lesson not found")
 
-    completion = db.get(LessonCompletion, (user.id, lesson_id))
-    if completion is None:
-        completion = LessonCompletion(
-            user_id=user.id, lesson_id=lesson_id, completed_at=datetime.now(UTC)
-        )
-        db.add(completion)
-        activity = _activity_row(db, user, day)
-        activity.completed_lessons = DailyActivity.completed_lessons + 1
-        db.commit()
-    # Completing a lesson twice is harmless and is not counted twice.
+    # Returns a row only for the request that actually created the completion,
+    # so a double tap counts the lesson once towards the daily goal.
+    created = db.execute(
+        upsert(db, LessonCompletion)
+        .values(user_id=user.id, lesson_id=lesson_id, completed_at=datetime.now(UTC))
+        .on_conflict_do_nothing(index_elements=[LessonCompletion.user_id, LessonCompletion.lesson_id])
+        .returning(LessonCompletion.lesson_id)
+    ).first()
+    if created is not None:
+        _add_activity(db, user, day, lessons=1)
+    db.commit()
 
+    completed_at = db.scalar(
+        select(LessonCompletion.completed_at).where(
+            LessonCompletion.user_id == user.id, LessonCompletion.lesson_id == lesson_id
+        )
+    )
     return LessonCompleteOut(
         lesson_id=lesson_id,
-        completed_at=completion.completed_at,
+        completed_at=completed_at,
         daily_goal=get_daily_goal(db, user, day),
     )

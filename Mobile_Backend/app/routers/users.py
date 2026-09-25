@@ -1,10 +1,10 @@
 import datetime as dt
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Response, status
 
 from app.core.deps import CurrentUser, DbSession
-from app.schemas.user import ProfileOut, ProfileUpdate
-from app.services import progress_service, user_service
+from app.schemas.user import AccountDeleteRequest, ProfileOut, ProfileUpdate
+from app.services import auth_service, progress_service, user_service
 
 router = APIRouter(prefix="/api/users", tags=["Profile"])
 
@@ -27,3 +27,15 @@ def update_my_profile(
     """Partial update: send only the fields to change (e.g. `{"dailyGoalMinutes": 30}`)."""
     user = user_service.update_profile(db, user, data)
     return user_service.build_profile(db, user, progress_service.resolve_day(date))
+
+
+@router.delete(
+    "/me",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete the account and all its data",
+    responses={403: {"description": "Incorrect password"}},
+)
+def delete_my_account(data: AccountDeleteRequest, user: CurrentUser, db: DbSession) -> Response:
+    """Permanent. The password is asked again so a stolen token alone cannot delete the account."""
+    auth_service.delete_account(db, user, data.password)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

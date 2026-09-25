@@ -36,6 +36,9 @@ class User(Base):
         ForeignKey("tutors.id", ondelete="SET NULL")
     )
 
+    # Copied into every access token; increasing it (logout) revokes them all.
+    token_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

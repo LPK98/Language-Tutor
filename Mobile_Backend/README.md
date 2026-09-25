@@ -61,19 +61,17 @@ There are no separate `vocabulary`, `grammar` or `pronunciation` models or route
 
 Each step says which folder to run the command in. On Windows, use PowerShell.
 
-### Step 1: Install PostgreSQL
+### Steps 1–2: Start PostgreSQL
 
-Download PostgreSQL from <https://www.postgresql.org/download/windows/> and install it. Remember the password you choose for the `postgres` user. The installer also installs **pgAdmin** and **psql**.
+This project has its own PostgreSQL server in the `Database/` folder, and the `language_tutor` database already exists there. See [Database/README.md](../Database/README.md).
 
-### Step 2: Create the database
+**Folder:** `Language-Tutor`
 
-**Folder:** any. **Command** (SQL Shell / psql, logged in as `postgres`):
-
-```sql
-CREATE DATABASE language_tutor;
+```powershell
+.\Database\start.ps1
 ```
 
-**Expect:** `CREATE DATABASE`. You can also do this in pgAdmin: right-click *Databases* → *Create* → *Database*.
+**Expect:** `PostgreSQL is running on localhost:5432.` Run this after every restart of your computer.
 
 ### Step 3: Activate the virtual environment
 
@@ -97,15 +95,9 @@ pip install -r requirements.txt
 
 **Expect:** `Successfully installed ...`, or `Requirement already satisfied` for everything.
 
-### Step 5: Configure `.env`
+### Step 5: Check `.env`
 
-**Folder:** `Mobile_Backend`. A `.env` file already exists with a generated `JWT_SECRET_KEY`. Open it and replace `YOUR_PASSWORD` in `DATABASE_URL` with your PostgreSQL password:
-
-```
-DATABASE_URL=postgresql+psycopg://postgres:YOUR_PASSWORD@localhost:5432/language_tutor
-```
-
-If the password contains special characters (`@ : / ? # %`), URL-encode them: `@` → `%40`, `#` → `%23`, `%` → `%25`.
+**Folder:** `Mobile_Backend`. `.env` is already filled in: `DATABASE_URL` points to the local server in `Database/` (with its generated password) and `JWT_SECRET_KEY` is a generated secret. You don't need to change anything. If you ever connect to a different PostgreSQL server, change `DATABASE_URL` there. If a password contains special characters (`@ : / ? # %`), URL-encode them: `@` → `%40`, `#` → `%23`, `%` → `%25`.
 
 To make a new secret key: `python -c "import secrets; print(secrets.token_urlsafe(64))"`
 
@@ -121,8 +113,7 @@ alembic upgrade head
 **Expect:** `Running upgrade  -> 001e8835a259, initial schema`.
 **If it fails:**
 - `password authentication failed`: the password in `DATABASE_URL` is wrong.
-- `database "language_tutor" does not exist`: redo Step 2.
-- `connection refused`: PostgreSQL is not running (check *Services* → `postgresql-x64-…`).
+- `connection refused`: PostgreSQL is not running. Run `.\Database\start.ps1`.
 
 ### Step 7: Load the learning content (seed)
 
@@ -210,15 +201,17 @@ All commands run in `Mobile_Backend` with the venv active.
 
 All endpoints start with `/api`. JSON uses **camelCase** to match the TypeScript types. Every error looks like `{"detail": "message"}`.
 
-🔓 = public (works for guests) · 🔐 = needs `Authorization: Bearer <token>` · 🔓+ = public, with extra personal data when a token is sent
+🔓 = public (works for guests) · 🔐 = needs `Authorization: Bearer <token>` · 🔓+ = public, with extra personal data when a valid token is sent (an expired token is ignored, so the screen still loads as a guest)
 
 | Method | Path | Screen / purpose | Auth |
 |---|---|---|---|
 | POST | `/api/auth/register` | create account, returns token | 🔓 |
 | POST | `/api/auth/login` | sign in, returns token | 🔓 |
+| POST | `/api/auth/logout` | sign out on every device (revokes all tokens) | 🔐 |
 | GET | `/api/auth/me` | the signed-in account | 🔐 |
 | GET | `/api/users/me?date=` | Profile screen (tutor, language, level, daily goal, streak) | 🔐 |
 | PATCH | `/api/users/me` | change name / level / language / tutor / daily goal | 🔐 |
+| DELETE | `/api/users/me` | delete the account and all its progress (body: `{"password": "..."}`) | 🔐 |
 | GET | `/api/tutors` | tutor list (Emma) | 🔓 |
 | GET | `/api/lessons/featured` | Home carousel | 🔓 |
 | GET | `/api/lessons/{lessonId}` | one lesson | 🔓 |
@@ -232,7 +225,7 @@ All endpoints start with `/api`. JSON uses **camelCase** to match the TypeScript
 | GET | `/api/progress/streak?date=` | Streak card and modal | 🔐 |
 | POST | `/api/progress/practice` | add practice time | 🔐 |
 | POST | `/api/progress/lessons/{lessonId}/complete` | finish a lesson | 🔐 |
-| GET | `/api/health` | server + database check | 🔓 |
+| GET | `/api/health` | server + database check (`503` with `"database": "down"` if unreachable) | 🔓 |
 
 **About `date`:** "today" depends on the learner's timezone, so the app sends its local date (`yyyy-mm-dd`, from `toISODate(new Date())` in `profile.ts`). If it's missing, the server uses today's UTC date. A date more than one day from UTC is rejected (400), which stops a client from back-filling an old streak.
 
@@ -256,7 +249,11 @@ All endpoints start with `/api`. JSON uses **camelCase** to match the TypeScript
 
 Errors: `409` email already registered · `422` invalid email, or a password under 8 characters or without both a letter and a number.
 
-**Login:** `POST /api/auth/login` with `{"email": "...", "password": "..."}` returns the same shape (`200`), or `401 {"detail": "Incorrect email or password"}`.
+**Login:** `POST /api/auth/login` with `{"email": "...", "password": "..."}` returns the same shape (`200`), or `401 {"detail": "Incorrect email or password"}`. After 5 wrong passwords for one email (or 50 from one IP address) within 15 minutes, login returns `429` with a `Retry-After` header (seconds to wait). The counts are kept in the server's memory, so they reset when it restarts; with several server processes, move them to a shared store such as Redis.
+
+**Logout:** `POST /api/auth/logout` returns `204`. Every token the user holds stops working, on all devices; the app should also delete its stored copy.
+
+**Delete the account:** `DELETE /api/users/me` with `{"password": "..."}` returns `204`, and all of the user's progress is deleted with it. A wrong password returns `403`.
 
 **Profile:** `GET /api/users/me`
 
@@ -273,7 +270,7 @@ Errors: `409` email already registered · `422` invalid email, or a password und
 
 **Update the profile:** `PATCH /api/users/me` with `{"dailyGoalMinutes": 30, "level": "B1"}` returns the updated profile. Only the fields you send change.
 
-**Record practice:** `POST /api/progress/practice` with `{"seconds": 300, "date": "2026-09-25"}` returns `{"goalMinutes": 60, "practisedSeconds": 300, "completedLessons": 0}`
+**Record practice:** `POST /api/progress/practice` with `{"seconds": 300, "date": "2026-09-25"}` returns `{"goalMinutes": 60, "practisedSeconds": 300, "completedLessons": 0}`. `seconds` must be a JSON number (not `"300"` or `true`), at most 4 hours per request; a day never stores more than 24 hours in total.
 
 **Complete a lesson:** `POST /api/progress/lessons/hello/complete` (body optional: `{"date": "2026-09-25"}`)
 
@@ -321,7 +318,8 @@ Remove-Item Env:TEST_DATABASE_URL
 | `tests/test_lessons.py` | Home lessons, learning paths, per-user completion |
 | `tests/test_practice.py` | recommended, categories, sections, sets, term statuses |
 | `tests/test_progress.py` | practice time, lesson completion, streak rules |
-| `tests/test_app.py` | docs, CORS, 500 errors hide internal details |
+| `tests/test_app.py` | docs, CORS, 500 errors hide internal details, health 503, security headers |
+| `tests/test_concurrency.py` | parallel requests (double taps) on practice time, lessons and term statuses; **runs on PostgreSQL only**, skipped on SQLite |
 
 ### Manually with Swagger
 

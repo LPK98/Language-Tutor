@@ -1,3 +1,7 @@
+from sqlalchemy import func, select
+
+from app.models import DailyActivity, LessonCompletion, User
+
 def test_profile_matches_app_profile_shape(client, auth_headers):
     response = client.get("/api/users/me", headers=auth_headers)
 
@@ -38,3 +42,33 @@ def test_update_profile_validation(client, auth_headers):
     assert patch({"languageCode": "fr-FR"}).status_code == 422
     assert patch({"name": "   "}).status_code == 422
     assert patch({"tutorId": "nobody"}).status_code == 400
+
+
+def test_update_profile_rejects_boolean_goal(client, auth_headers):
+    response = client.patch("/api/users/me", headers=auth_headers, json={"dailyGoalMinutes": True})
+    assert response.status_code == 422
+
+
+def test_delete_account_requires_password(client, auth_headers):
+    response = client.request(
+        "DELETE", "/api/users/me", headers=auth_headers, json={"password": "Wrong1234"}
+    )
+    assert response.status_code == 403
+    assert client.get("/api/users/me", headers=auth_headers).status_code == 200
+
+
+def test_delete_account_removes_user_and_progress(client, auth_headers, session_factory):
+    client.post("/api/progress/practice", headers=auth_headers, json={"seconds": 60})
+    client.post("/api/progress/lessons/hello/complete", headers=auth_headers)
+
+    response = client.request(
+        "DELETE", "/api/users/me", headers=auth_headers, json={"password": "Secret123"}
+    )
+
+    assert response.status_code == 204
+    assert client.get("/api/users/me", headers=auth_headers).status_code == 401
+    login = client.post("/api/auth/login", json={"email": "learner@example.com", "password": "Secret123"})
+    assert login.status_code == 401
+    with session_factory() as db:
+        for model in (User, DailyActivity, LessonCompletion):
+            assert db.scalar(select(func.count()).select_from(model)) == 0

@@ -1,9 +1,8 @@
 import uuid
-from datetime import datetime
 
 from pydantic import EmailStr, Field, field_validator
 
-from app.schemas.common import CamelModel
+from app.schemas.common import CamelModel, Name, UtcDateTime
 
 
 def _normalise_email(value: str) -> str:
@@ -13,7 +12,7 @@ def _normalise_email(value: str) -> str:
 class RegisterRequest(CamelModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
-    name: str = Field(default="Student", min_length=1, max_length=100)
+    name: Name = "Student"
 
     _email = field_validator("email")(_normalise_email)
 
@@ -22,14 +21,6 @@ class RegisterRequest(CamelModel):
     def password_strength(cls, value: str) -> str:
         if not any(char.isalpha() for char in value) or not any(char.isdigit() for char in value):
             raise ValueError("Password must contain at least one letter and one number")
-        return value
-
-    @field_validator("name")
-    @classmethod
-    def strip_name(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            raise ValueError("Name cannot be blank")
         return value
 
 
@@ -44,7 +35,7 @@ class AccountOut(CamelModel):
     id: uuid.UUID
     email: str
     name: str
-    created_at: datetime
+    created_at: UtcDateTime
 
 
 class TokenResponse(CamelModel):

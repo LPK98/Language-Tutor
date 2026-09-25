@@ -1,3 +1,10 @@
+from datetime import UTC, datetime, timedelta
+
+import jwt
+
+from app.core.config import get_settings
+
+
 def test_featured_lessons_match_home_carousel(client):
     response = client.get("/api/lessons/featured")
 
@@ -48,3 +55,20 @@ def test_learning_paths_show_completion_only_for_that_user(client, auth_headers)
     assert mine[0]["lessons"][0]["completed"] is True
     assert mine[0]["lessons"][1]["completed"] is False
     assert guest[0]["lessons"][0]["completed"] is False
+
+
+def test_guest_pages_ignore_an_expired_or_revoked_token(client, auth_headers):
+    """The app may still hold an old token; public screens must load as a guest."""
+    user_id = client.get("/api/auth/me", headers=auth_headers).json()["id"]
+    expired = jwt.encode(
+        {"sub": user_id, "ver": 0, "exp": datetime.now(UTC) - timedelta(minutes=1)},
+        get_settings().jwt_secret_key,
+        algorithm="HS256",
+    )
+    client.post("/api/auth/logout", headers=auth_headers)
+
+    for headers in ({"Authorization": f"Bearer {expired}"}, auth_headers):
+        assert client.get("/api/learning-paths", headers=headers).status_code == 200
+        assert client.get("/api/practice/sets/vocab", headers=headers).status_code == 200
+        # Endpoints that need an account still refuse the token.
+        assert client.get("/api/users/me", headers=headers).status_code == 401

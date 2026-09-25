@@ -22,6 +22,7 @@ from sqlalchemy.pool import StaticPool  # noqa: E402
 
 import app.models  # noqa: E402,F401
 from app.core.database import Base, get_db  # noqa: E402
+from app.core.rate_limit import login_failures_by_email, login_failures_by_ip  # noqa: E402
 from app.main import app  # noqa: E402
 from app.seed import seed  # noqa: E402
 
@@ -53,6 +54,13 @@ def session_factory(engine):
         seed(db)
     yield factory
     Base.metadata.drop_all(engine)
+
+
+@pytest.fixture(autouse=True)
+def reset_login_limits():
+    """Failed-login counts live in memory; start every test from zero."""
+    login_failures_by_email.clear()
+    login_failures_by_ip.clear()
 
 
 @pytest.fixture

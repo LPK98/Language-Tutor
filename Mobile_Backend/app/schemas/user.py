@@ -1,9 +1,9 @@
 import uuid
 
-from pydantic import Field, field_validator
+from pydantic import Field, StrictInt, field_validator
 
 from app.models.enums import Level
-from app.schemas.common import CamelModel
+from app.schemas.common import CamelModel, Name
 from app.schemas.progress import DailyGoalOut, StreakOut
 from app.schemas.tutor import TutorOut
 
@@ -40,18 +40,11 @@ class ProfileOut(CamelModel):
 class ProfileUpdate(CamelModel):
     """Only the fields sent are changed."""
 
-    name: str | None = Field(default=None, min_length=1, max_length=100)
+    name: Name | None = None
     level: Level | None = None
     language_code: str | None = None
     tutor_id: str | None = Field(default=None, max_length=50)
-    daily_goal_minutes: int | None = Field(default=None, ge=1, le=240)
-
-    @field_validator("name")
-    @classmethod
-    def strip_name(cls, value: str | None) -> str | None:
-        if value is not None and not value.strip():
-            raise ValueError("Name cannot be blank")
-        return value.strip() if value else value
+    daily_goal_minutes: StrictInt | None = Field(default=None, ge=1, le=240)
 
     @field_validator("language_code")
     @classmethod
@@ -59,3 +52,7 @@ class ProfileUpdate(CamelModel):
         if value is not None and value not in SUPPORTED_LANGUAGES:
             raise ValueError(f"Unsupported language. Choose one of: {', '.join(SUPPORTED_LANGUAGES)}")
         return value
+
+
+class AccountDeleteRequest(CamelModel):
+    password: str = Field(min_length=1, max_length=128)

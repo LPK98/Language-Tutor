@@ -1,4 +1,7 @@
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import OperationalError
+
+import app.main as app_main
 
 from app.main import app
 from app.services import lesson_service
@@ -28,3 +31,21 @@ def test_cors_allows_expo_web(client):
         headers={"Origin": "http://localhost:8081", "Access-Control-Request-Method": "GET"},
     )
     assert response.headers["access-control-allow-origin"] == "http://localhost:8081"
+
+
+def test_security_headers(client):
+    headers = client.get("/").headers
+    assert headers["x-content-type-options"] == "nosniff"
+    assert headers["x-frame-options"] == "DENY"
+
+
+def test_health_reports_database_down(client, monkeypatch):
+    class BrokenEngine:
+        def connect(self):
+            raise OperationalError("SELECT 1", {}, Exception("connection refused"))
+
+    monkeypatch.setattr(app_main, "engine", BrokenEngine())
+    response = client.get("/api/health")
+
+    assert response.status_code == 503
+    assert response.json() == {"status": "error", "database": "down"}

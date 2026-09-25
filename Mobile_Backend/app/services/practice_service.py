@@ -1,6 +1,7 @@
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.core.database import upsert
 from app.core.errors import BadRequestError, NotFoundError
 from app.models import PracticeCategory, PracticeSet, PracticeTerm, TermStatusEntry, User
 from app.models.enums import PracticeSetKind, TermStatus
@@ -102,12 +103,19 @@ def set_term_status(
     if term is None:
         raise NotFoundError("Term not found")
 
-    entry = db.get(TermStatusEntry, (user.id, term.id))
+    # Single statements, so two taps at the same moment cannot collide.
     if status is None:
-        if entry is not None:
-            db.delete(entry)
-    elif entry is None:
-        db.add(TermStatusEntry(user_id=user.id, term_id=term.id, status=status))
+        db.execute(
+            delete(TermStatusEntry).where(
+                TermStatusEntry.user_id == user.id, TermStatusEntry.term_id == term.id
+            )
+        )
     else:
-        entry.status = status
+        stmt = upsert(db, TermStatusEntry).values(user_id=user.id, term_id=term.id, status=status)
+        db.execute(
+            stmt.on_conflict_do_update(
+                index_elements=[TermStatusEntry.user_id, TermStatusEntry.term_id],
+                set_={"status": stmt.excluded.status, "updated_at": func.now()},
+            )
+        )
     db.commit()

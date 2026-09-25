@@ -12,6 +12,11 @@ venv/
 .mypy_cache/
 *.sqlite3
 
+# Local PostgreSQL server (Database/): program files, data and logs
+Database/postgresql/
+Database/data/
+Database/*.log
+
 # Node (Mobile_Frontend)
 node_modules/
 .expo/

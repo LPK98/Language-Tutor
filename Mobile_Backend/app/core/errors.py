@@ -29,14 +29,31 @@ class NotFoundError(AppError):
     status_code = status.HTTP_404_NOT_FOUND
 
 
+class ForbiddenError(AppError):
+    status_code = status.HTTP_403_FORBIDDEN
+
+
 class ConflictError(AppError):
     status_code = status.HTTP_409_CONFLICT
+
+
+class TooManyRequestsError(AppError):
+    status_code = status.HTTP_429_TOO_MANY_REQUESTS
+
+    def __init__(self, detail: str, retry_after: int):
+        super().__init__(detail)
+        self.retry_after = retry_after
 
 
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def handle_app_error(_: Request, exc: AppError) -> JSONResponse:
-        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+        headers = None
+        if isinstance(exc, TooManyRequestsError):
+            headers = {"Retry-After": str(exc.retry_after)}
+        return JSONResponse(
+            status_code=exc.status_code, content={"detail": exc.detail}, headers=headers
+        )
 
     @app.exception_handler(Exception)
     async def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:

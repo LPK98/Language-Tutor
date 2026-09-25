@@ -1,8 +1,9 @@
 """Reusable FastAPI dependencies for authentication.
 
 - `CurrentUser`  : endpoint requires a valid token (401 otherwise).
-- `OptionalUser` : endpoint works for guests too; a token only adds personal
-                   data such as lesson completion. The app has a guest mode
+- `OptionalUser` : endpoint works for guests too; a valid token only adds
+                   personal data such as lesson completion, and an invalid or
+                   expired one is ignored. The app has a guest mode
                    ("Sign in to keep your progress"), so content stays public.
 """
 
@@ -29,23 +30,36 @@ def _unauthorized(detail: str) -> HTTPException:
     )
 
 
+def _user_from_token(db: Session, credentials: HTTPAuthorizationCredentials | None) -> User | None:
+    if credentials is None:
+        return None
+    claims = decode_access_token(credentials.credentials)
+    if claims is None:
+        return None
+    user = db.get(User, claims.user_id)
+    if user is None or user.token_version != claims.token_version:
+        return None
+    return user
+
+
 def get_optional_user(
     db: DbSession,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
 ) -> User | None:
-    if credentials is None:
-        return None
+    # An expired or revoked token means "guest" here, not an error: the app may
+    # still hold an old token, and public screens must keep loading.
+    return _user_from_token(db, credentials)
 
-    user_id = decode_access_token(credentials.credentials)
-    user = db.get(User, user_id) if user_id else None
+
+def get_current_user(
+    db: DbSession,
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+) -> User:
+    if credentials is None:
+        raise _unauthorized("Not authenticated")
+    user = _user_from_token(db, credentials)
     if user is None:
         raise _unauthorized("Invalid or expired token")
-    return user
-
-
-def get_current_user(user: Annotated[User | None, Depends(get_optional_user)]) -> User:
-    if user is None:
-        raise _unauthorized("Not authenticated")
     return user
 
 

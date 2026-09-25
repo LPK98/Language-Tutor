@@ -27,6 +27,24 @@ engine = create_engine(get_settings().database_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
+def upsert(db: Session, model: type[Base]):
+    """An INSERT that supports ON CONFLICT DO NOTHING / DO UPDATE.
+
+    "Create the row if it is missing" must be one statement: checking first and
+    inserting afterwards fails when two requests arrive together, because both
+    see no row and the second insert hits the primary key. PostgreSQL (the app)
+    and SQLite (the default tests) share the same ON CONFLICT syntax.
+    """
+    dialect = db.get_bind().dialect.name
+    if dialect == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert
+    elif dialect == "sqlite":
+        from sqlalchemy.dialects.sqlite import insert
+    else:
+        raise NotImplementedError(f"upsert is not supported on {dialect}")
+    return insert(model)
+
+
 def get_db() -> Iterator[Session]:
     """FastAPI dependency: one session per request, always closed afterwards."""
     db = SessionLocal()

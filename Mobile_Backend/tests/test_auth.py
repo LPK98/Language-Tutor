@@ -65,3 +65,49 @@ def test_me_requires_a_valid_token(client, auth_headers):
     response = client.get("/api/auth/me", headers=auth_headers)
     assert response.status_code == 200
     assert response.json()["email"] == "learner@example.com"
+
+
+def login(client, password: str, email: str = "learner@example.com"):
+    return client.post("/api/auth/login", json={"email": email, "password": password})
+
+
+def test_login_is_blocked_after_repeated_failures(client):
+    register(client)
+    for _ in range(5):
+        assert login(client, "Wrong1234").status_code == 401
+
+    blocked = login(client, "Secret123")  # even the right password waits
+    assert blocked.status_code == 429
+    assert int(blocked.headers["Retry-After"]) > 0
+    # Other accounts are not affected.
+    register(client, email="other@example.com")
+    assert login(client, "Secret123", email="other@example.com").status_code == 200
+
+
+def test_successful_login_resets_the_failure_count(client):
+    register(client)
+    for _ in range(4):
+        login(client, "Wrong1234")
+    assert login(client, "Secret123").status_code == 200
+    for _ in range(4):
+        assert login(client, "Wrong1234").status_code == 401
+
+
+def test_logout_revokes_the_token(client, auth_headers):
+    assert client.post("/api/auth/logout", headers=auth_headers).status_code == 204
+
+    assert client.get("/api/auth/me", headers=auth_headers).status_code == 401
+    # Signing in again issues a working token.
+    token = login(client, "Secret123").json()["accessToken"]
+    assert client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"}).status_code == 200
+
+
+def test_created_at_is_utc(client):
+    assert register(client).json()["user"]["createdAt"].endswith("Z")
+
+
+def test_register_trims_name_before_length_check(client):
+    response = register(client, name=" " + "a" * 100)
+    assert response.status_code == 201
+    assert response.json()["user"]["name"] == "a" * 100
+    assert register(client, email="x@example.com", name="a" * 101).status_code == 422
