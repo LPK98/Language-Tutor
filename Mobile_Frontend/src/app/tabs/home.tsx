@@ -21,7 +21,7 @@ import { EMMA, LESSONS, categoryColor } from '@/constants/lessons';
 import { Colors, FontSize, FontWeight, Layout, Radius, Spacing } from '@/constants/theme';
 
 /** Share of the content width the lesson artwork occupies. */
-const ILLUSTRATION_WIDTH = '80%';
+const ILLUSTRATION_WIDTH = '68%';
 
 export default function HomeScreen() {
   const router = useRouter();

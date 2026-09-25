@@ -1,0 +1,21 @@
+# Web framework and server
+fastapi==0.141.1
+uvicorn==0.53.0
+
+# Database: ORM, migrations, PostgreSQL driver
+sqlalchemy==2.1.1
+alembic==1.20.0
+psycopg[binary]==3.3.6
+
+# Validation and settings (reads .env)
+pydantic==2.13.5
+pydantic-settings==2.15.0
+email-validator==2.3.0
+
+# Authentication: JWT tokens and Argon2 password hashing
+pyjwt==2.15.0
+pwdlib[argon2]==0.3.1
+
+# Testing
+pytest==9.1.1
+httpx2==2.13.1
